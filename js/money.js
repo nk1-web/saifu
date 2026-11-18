@@ -104,6 +104,35 @@ export function savingsSummary(s, today = dayKey()) {
   return { months, cumulative, thisMonth, currentTarget: current.target, currentNet: current.net };
 }
 
+// ---------- 推移（グラフ用） ----------
+
+// 今月を最後にした直近 n か月。記録が始まる前の月は省く（最低1か月）
+export function recentMonths(s, n, today = dayKey()) {
+  const thisMonth = today.slice(0, 7);
+  const first = s.tx.reduce((m, t) => (t.date && t.date.slice(0, 7) < m ? t.date.slice(0, 7) : m), thisMonth);
+  const out = [];
+  let ym = thisMonth;
+  for (let i = 0; i < n; i++) {
+    out.unshift(ym);
+    ym = addMonths(ym, -1);
+    if (ym < first) break;
+  }
+  return out;
+}
+
+// 月ごと・カテゴリごとの支出 { ym: { cat: 金額 } }
+export function expenseByMonth(s, months) {
+  const set = new Set(months);
+  const out = Object.fromEntries(months.map((m) => [m, {}]));
+  for (const t of s.tx) {
+    if (t.type !== 'expense' || !t.date) continue;
+    const ym = t.date.slice(0, 7);
+    if (!set.has(ym)) continue;
+    out[ym][t.category] = (out[ym][t.category] || 0) + (Number(t.amount) || 0);
+  }
+  return out;
+}
+
 // ---------- ホーム用のまとめ ----------
 
 export function overview(s, today = dayKey()) {

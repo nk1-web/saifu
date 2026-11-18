@@ -1,8 +1,79 @@
 import * as store from '../store.js';
 import { h, esc, refs, toast, haptic } from '../ui.js';
 import { promptSheet } from '../sheet.js';
-import { yen, yenPlain, toNumber, monthLabel, monthKey } from '../fmt.js';
+import { yen, yenPlain, toNumber, monthLabel, monthKey, monthShort } from '../fmt.js';
 import { savingsSummary } from '../money.js';
+import { columnChart, lineChart, legend } from '../charts.js';
+
+const STATUS = {
+  ok: { color: 'var(--good)', label: '達成' },
+  ng: { color: 'var(--critical)', label: '未達' },
+  now: { color: 'var(--ink-3)', label: '今月（途中）' },
+};
+const statusOf = (m) => (m.achieved === true ? 'ok' : m.achieved === false ? 'ng' : 'now');
+
+function renderCharts(r, sv) {
+  // 古い順に並べ直し、多すぎるときは直近12か月だけ
+  const months = [...sv.months].reverse().slice(-12);
+  const all = [...sv.months].reverse();
+  let cum = 0;
+  const cumByYm = {};
+  all.forEach((m) => {
+    if (m.achieved === true) cum += m.target;
+    cumByYm[m.ym] = cum;
+  });
+  const cats = months.map((m) => ({ label: monthShort(m.ym), title: `${monthLabel(m.ym)}${m.isCurrent ? '（今月）' : ''}` }));
+
+  lineChart(r.cumChart, {
+    cats,
+    values: months.map((m) => cumByYm[m.ym]),
+    color: 'var(--ink)',
+    height: 170,
+    emptyText: 'まだ達成した月がありません。達成すると、ここに累計が伸びていきます',
+    tooltip: (i) => {
+      const m = months[i];
+      const st = STATUS[statusOf(m)];
+      return {
+        title: cats[i].title,
+        total: yen(cumByYm[m.ym]),
+        rows: [{ color: st.color, value: m.achieved === true ? `+${yen(m.target)}` : yen(0), label: `この月 ${st.label}` }],
+      };
+    },
+  });
+
+  columnChart(r.netChart, {
+    cats,
+    series: [{ id: 'net', label: '残り', color: 'var(--ink-3)' }],
+    values: months.map((m) => [m.net]),
+    colorAt: (i) => STATUS[statusOf(months[i])].color,
+    marks: months.map((m, i) => ({ i, value: m.target })),
+    height: 200,
+    emptyText: '収入や支出を記録すると、月ごとの残りが出ます',
+    tooltip: (i) => {
+      const m = months[i];
+      const st = STATUS[statusOf(m)];
+      const diff = m.net - m.target;
+      return {
+        title: cats[i].title,
+        total: yen(m.net, { sign: true }),
+        rows: [
+          { color: 'var(--ink)', value: yen(m.target), label: '目標' },
+          { color: 'var(--c-income)', value: yen(m.income), label: '収入' },
+          { color: 'var(--ink-2)', value: yen(m.expense), label: '支出' },
+        ],
+        note: `${st.label}${m.isCurrent ? '' : ''} ・ 目標まで ${diff >= 0 ? `${yen(diff)} 余裕` : `${yen(-diff)} 足りない`}`,
+      };
+    },
+  });
+  r.netLegend.replaceChildren(
+    legend([
+      { label: '達成', color: STATUS.ok.color },
+      { label: '未達', color: STATUS.ng.color },
+      { label: '今月（途中）', color: STATUS.now.color },
+      { label: '目標', color: 'var(--ink)', shape: 'line' },
+    ])
+  );
+}
 
 export function createSavings(ctx) {
   const el = h(`
@@ -17,6 +88,16 @@ export function createSavings(ctx) {
         <div class="card">
           <button class="row" data-ref="monthly"><div class="main"><div class="title">毎月の貯金額</div><div class="meta">基本はこの金額。月ごとに変えられます</div></div><span class="amt num" data-ref="monthlyV"></span></button>
           <div class="row"><div class="main"><div class="title">数え始める月</div><div class="meta">この月から達成を見ます</div></div><input data-ref="start" type="month" style="border:0;background:none;font-weight:800;font-size:15px;text-align:right;outline:0"></div>
+        </div>
+        <div class="section-title">推移</div>
+        <div class="card chart-card">
+          <div class="chart-head"><span class="t">貯金の累計</span><span class="d">達成した月の分を足したもの</span></div>
+          <div data-ref="cumChart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><span class="t">毎月の残りと目標</span><span class="d">残り = 収入 − 支出</span></div>
+          <div data-ref="netChart"></div>
+          <div data-ref="netLegend"></div>
         </div>
         <div class="section-title">月ごとの達成</div>
         <div class="card" data-ref="months"></div>
@@ -70,6 +151,7 @@ export function createSavings(ctx) {
     r.cum.textContent = yen(sv.cumulative);
     r.monthlyV.textContent = yen(s.savings.monthly || 0);
     r.start.value = s.savings.startMonth || monthKey();
+    renderCharts(r, sv);
     r.months.innerHTML = sv.months
       .map((m) => {
         const cls = m.achieved === true ? 'is-ok' : m.achieved === false ? 'is-ng' : m.isCurrent ? 'is-now' : '';
@@ -79,6 +161,13 @@ export function createSavings(ctx) {
       })
       .join('');
   }
+
+  let rw = 0;
+  window.addEventListener('resize', () => {
+    if (el.hidden || Math.abs(window.innerWidth - rw) < 2) return;
+    rw = window.innerWidth;
+    refresh();
+  });
 
   return { el, refresh };
 }
