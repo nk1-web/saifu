@@ -175,7 +175,6 @@ export async function openImageImport(file) {
     <div class="progress">
       <div class="ring"></div>
       <div class="t" data-ref="t">読み取りの準備中</div>
-      <div class="d">初回は日本語データ（十数MB）を取得します。しばらくお待ちください</div>
       <div class="track"><i data-ref="bar"></i></div>
     </div>`);
   const r = refs(body);
@@ -206,7 +205,7 @@ export async function openImageImport(file) {
         rawText: res.text,
         candidates: res.candidates,
       });
-      if (!res.amount) toast('金額を読み取れませんでした。手で入れてください');
+      if (!res.amount) toast('金額を読み取れませんでした');
     }, 300);
   } catch (e) {
     console.error(e);
@@ -220,10 +219,10 @@ export async function openImageImport(file) {
 export function openAddMenu() {
   const body = h(`
     <div class="menu">
-      <button class="menu-item" data-act="image"><span class="row-icon" style="--c:var(--k-pay)">${icons.image}</span><span><div class="t">画像から読み取る</div><div class="d">レシートや決済アプリのスクショ</div></span></button>
-      <button class="menu-item" data-act="expense"><span class="row-icon" style="--c:var(--ink-2)">${icons.arrowUp}</span><span><div class="t">支出を手入力</div><div class="d">金額・手段・カテゴリ</div></span></button>
-      <button class="menu-item" data-act="income"><span class="row-icon" style="--c:var(--plus)">${icons.arrowDown}</span><span><div class="t">収入を記録</div><div class="d">給料など、残高に足す</div></span></button>
-      <button class="menu-item" data-act="transfer"><span class="row-icon" style="--c:var(--k-bank)">${icons.swap}</span><span><div class="t">チャージ・移動</div><div class="d">口座から引き出し、PayPayやPASMOへ</div></span></button>
+      <button class="menu-item" data-act="image"><span class="row-icon" style="--c:var(--k-pay)">${icons.image}</span><span><div class="t">画像から読み取る</div></span></button>
+      <button class="menu-item" data-act="expense"><span class="row-icon" style="--c:var(--ink-2)">${icons.arrowUp}</span><span><div class="t">支出を手入力</div></span></button>
+      <button class="menu-item" data-act="income"><span class="row-icon" style="--c:var(--plus)">${icons.arrowDown}</span><span><div class="t">収入を記録</div></span></button>
+      <button class="menu-item" data-act="transfer"><span class="row-icon" style="--c:var(--k-bank)">${icons.swap}</span><span><div class="t">チャージ・移動</div></span></button>
     </div>`);
   const sheet = openSheet({ title: '記録する', body });
   body.addEventListener('click', (e) => {
@@ -397,8 +396,8 @@ export function openAccountMenu(account) {
   const body = h(`
     <div class="menu">
       <div class="hero" style="grid-template-columns:1fr"><div><div class="k">${esc(account.name)}の残高</div><div class="v num ${bal < 0 ? 'is-neg' : ''}">${yen(bal)}</div></div></div>
-      <button class="menu-item" data-act="adjust"><span class="row-icon" style="--c:${k.color}">${icons.pen}</span><span><div class="t">残高を直接なおす</div><div class="d">実際の金額に合わせる</div></span></button>
-      <button class="menu-item" data-act="charge"><span class="row-icon" style="--c:var(--k-bank)">${icons.swap}</span><span><div class="t">${isWallet ? 'チャージ・入金' : '引き出し・移動'}</div><div class="d">${isWallet ? '他の手段からここへ' : 'ここから他の手段へ'}</div></span></button>
+      <button class="menu-item" data-act="adjust"><span class="row-icon" style="--c:${k.color}">${icons.pen}</span><span><div class="t">残高を直接なおす</div></span></button>
+      <button class="menu-item" data-act="charge"><span class="row-icon" style="--c:var(--k-bank)">${icons.swap}</span><span><div class="t">${isWallet ? 'チャージ・入金' : '引き出し・移動'}</div></span></button>
       <button class="menu-item" data-act="expense"><span class="row-icon" style="--c:var(--ink-2)">${icons.arrowUp}</span><span><div class="t">この手段で支出</div></span></button>
       <button class="menu-item" data-act="income"><span class="row-icon" style="--c:var(--plus)">${icons.arrowDown}</span><span><div class="t">この手段に収入</div></span></button>
       <button class="menu-item" data-act="edit"><span class="row-icon" style="--c:var(--ink-3)">${icons.settings}</span><span><div class="t">名前・種類を編集</div></span></button>

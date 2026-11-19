@@ -9,15 +9,14 @@ export function createPlan(ctx) {
   const el = h(`
     <div class="view">
       <div class="scroller">
-        <header class="page-head"><h1>予定</h1><span class="sub">これから使うお金</span></header>
+        <header class="page-head"><h1>予定</h1></header>
         <div class="hero">
-          <div><div class="k">今後の使用予定</div><div class="v num" data-ref="total"></div></div>
-          <div><div class="k">毎月の予定の合計</div><div class="v num" data-ref="monthly"></div></div>
+          <div><div class="k">使用予定</div><div class="v num" data-ref="total"></div></div>
+          <div><div class="k">毎月</div><div class="v num" data-ref="monthly"></div></div>
         </div>
-        <div class="section-title">予定の一覧</div>
+        <div class="section-title">一覧</div>
         <div class="card" data-ref="list"></div>
         <div data-ref="doneWrap"></div>
-        <p class="settings-note">予定日が来るとホームに出ます。「記録」で実際の支出として残高から引き、「なし」はその回だけ飛ばします。</p>
       </div>
     </div>`);
   const r = refs(el);
@@ -60,11 +59,11 @@ export function createPlan(ctx) {
             }</div>`;
           })
           .join('')
-      : '<div class="empty">予定はまだありません。<br>右下の＋でサブスクや予定している出費を追加できます</div>';
+      : '<div class="empty">予定なし</div>';
 
     const done = s.planned.filter((p) => p.repeat === 'once' && p.doneOnce);
     r.doneWrap.innerHTML = done.length
-      ? `<div class="section-title">済んだ予定</div><div class="card">${done
+      ? `<div class="section-title">済み</div><div class="card">${done
           .map((p) => `<div class="row"><span class="dot" style="--c:var(--ink-3)"></span><div class="main"><div class="title" style="color:var(--ink-3)">${esc(p.name)}</div><div class="meta">${dayLabel(p.date)}</div></div><span class="amt num is-muted">${yen(p.amount)}</span><span class="btns"><button class="mini-btn" data-act="revive" data-id="${esc(p.id)}">戻す</button><button class="mini-btn" data-act="remove" data-id="${esc(p.id)}">消す</button></span></div>`)
           .join('')}</div>`
       : '';

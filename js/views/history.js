@@ -5,7 +5,7 @@ import { icons } from '../icons.js';
 import { yen, monthKey, monthLabel, monthShort, addMonths, dayLabel } from '../fmt.js';
 import { monthNet, recentMonths, expenseByMonth } from '../money.js';
 import { openTxEditor } from '../editors.js';
-import { columnChart, legend } from '../charts.js';
+import { lineChart, legend } from '../charts.js';
 import { txRow } from './home.js';
 
 const PERIODS = [6, 12];
@@ -50,14 +50,14 @@ export function createHistory(ctx) {
           </div>
           <div class="stat-row">
             <div class="card stat"><div class="k">今月の支出</div><div class="v num" data-ref="statNow"></div><div class="delta num" data-ref="statDelta"></div></div>
-            <div class="card stat"><div class="k" data-ref="avgLabel">月平均</div><div class="v num" data-ref="statAvg"></div><div class="delta" data-ref="statAvgNote"></div></div>
+            <div class="card stat"><div class="k">月平均</div><div class="v num" data-ref="statAvg"></div></div>
           </div>
           <div class="card chart-card">
-            <div class="chart-head"><span class="t" data-ref="chartTitle">支出の推移</span><span class="d">棒をタップで内訳</span></div>
+            <div class="chart-head"><span class="t" data-ref="chartTitle">支出の推移</span></div>
             <div data-ref="chart"></div>
             <div data-ref="legend"></div>
           </div>
-          <div class="section-title" data-ref="tableTitle">ジャンル別の合計</div>
+          <div class="section-title" data-ref="tableTitle">内訳</div>
           <div class="card" data-ref="table"></div>
         </section>
       </div>
@@ -141,7 +141,7 @@ export function createHistory(ctx) {
 
     const list = s.tx.filter((t) => t.date?.startsWith(ym)).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
     if (!list.length) {
-      r.list.innerHTML = '<div class="empty">この月の記録はありません</div>';
+      r.list.innerHTML = '<div class="empty">記録なし</div>';
       return;
     }
     const groups = new Map();
@@ -170,25 +170,21 @@ export function createHistory(ctx) {
     r.statNow.textContent = yen(now);
     const prevYm = addMonths(thisMonth, -1);
     const prevTotal = months.includes(prevYm) ? totals[months.indexOf(prevYm)] : null;
-    r.statDelta.textContent = prevTotal == null ? '先月の記録なし' : `先月 ${yen(prevTotal)}`;
+    r.statDelta.textContent = prevTotal == null ? '' : `先月 ${yen(prevTotal)}`;
     const past = totals.slice(0, -1);
     const avg = past.length ? past.reduce((a, v) => a + v, 0) / past.length : now;
-    r.avgLabel.textContent = past.length ? `月平均（過去${past.length}か月）` : '月平均';
     r.statAvg.textContent = yen(avg);
-    r.statAvgNote.textContent = past.length ? (now > avg ? `今月は平均より ${yen(now - avg)} 多い` : `今月は平均より ${yen(avg - now)} 少ない`) : '記録が1か月分だけです';
 
     const cats = months.map((m) => ({ label: monthShort(m), title: `${monthLabel(m)}${m === thisMonth ? '（今月）' : ''}` }));
     const visible = focus ? CATEGORIES.filter((c) => c.id === focus) : CATEGORIES;
 
     if (split === 'total') {
       r.chartTitle.textContent = '支出の合計';
-      columnChart(r.chart, {
+      lineChart(r.chart, {
         cats,
-        series: [{ id: 'total', label: '支出', color: 'var(--ink-2)' }],
-        values: totals.map((v) => [v]),
-        colorAt: (i) => (i === months.length - 1 ? 'var(--ink)' : 'var(--ink-2)'),
-        height: 210,
-        emptyText: '支出の記録がまだありません',
+        series: [{ label: '支出', color: 'var(--ink)', values: totals, area: true }],
+        height: 200,
+        emptyText: '支出なし',
         tooltip: (i) => {
           const m = months[i];
           const rows = CATEGORIES.filter((c) => data[m][c.id]).sort((a, b) => data[m][b.id] - data[m][a.id]).slice(0, 4).map((c) => ({ color: c.color, value: yen(data[m][c.id]), label: c.label }));
@@ -198,38 +194,36 @@ export function createHistory(ctx) {
       r.legend.textContent = '';
     } else {
       const focused = visible[0];
-      r.chartTitle.textContent = focus ? `${focused.label}の推移` : 'ジャンル別の支出';
-      columnChart(r.chart, {
+      r.chartTitle.textContent = focus ? focused.label : 'ジャンル別';
+      lineChart(r.chart, {
         cats,
-        series: visible,
-        values: months.map((m) => visible.map((c) => data[m][c.id] || 0)),
-        height: 210,
-        emptyText: focus ? `${focused.label}の支出はこの期間にありません` : '支出の記録がまだありません',
+        series: visible.map((c) => ({ label: c.label, color: c.color, values: months.map((m) => data[m][c.id] || 0), area: !!focus })),
+        height: 200,
+        emptyText: '支出なし',
         tooltip: (i) => {
           const m = months[i];
-          const rows = visible.filter((c) => data[m][c.id]).map((c) => ({ color: c.color, value: yen(data[m][c.id]), label: c.label }));
           const sum = visible.reduce((a, c) => a + (data[m][c.id] || 0), 0);
-          if (focus) return { title: cats[i].title, total: yen(sum), rows: [], note: sum ? focused.label : 'この月の支出なし' };
-          return { title: cats[i].title, total: yen(sum), rows, note: rows.length ? null : 'この月の支出なし' };
+          if (focus) return { title: cats[i].title, total: yen(sum), rows: [] };
+          const rows = visible.filter((c) => data[m][c.id]).sort((a, b) => data[m][b.id] - data[m][a.id]).map((c) => ({ color: c.color, value: yen(data[m][c.id]), label: c.label }));
+          return { title: cats[i].title, total: yen(sum), rows };
         },
       });
-      r.legend.replaceChildren(legend(CATEGORIES, { active: focus }));
+      r.legend.replaceChildren(legend(CATEGORIES, { shape: 'line', active: focus }));
     }
 
     // 表：期間のジャンル別合計（グラフと同じ数字を、タップなしでも読めるように）
     const sums = Object.fromEntries(CATEGORIES.map((c) => [c.id, months.reduce((a, m) => a + (data[m][c.id] || 0), 0)]));
     const all = Object.values(sums).reduce((a, v) => a + v, 0);
-    r.tableTitle.textContent = `ジャンル別の合計（${months.length}か月）`;
     const rows = CATEGORIES.filter((c) => sums[c.id] > 0).sort((a, b) => sums[b.id] - sums[a.id]);
     r.table.innerHTML = rows.length
       ? rows
           .map(
             (c) =>
-              `<button class="row ${focus === c.id ? 'is-on' : ''}" data-cat="${c.id}"><span class="dot" style="--c:${c.color}"></span><div class="main"><div class="title">${esc(c.label)}</div><div class="meta num">月平均 ${yen(sums[c.id] / months.length)}</div></div><span class="amt num">${yen(sums[c.id])}</span><span class="share num">${Math.round((sums[c.id] / all) * 100)}%</span></button>`
+              `<button class="row ${focus === c.id ? 'is-on' : ''}" data-cat="${c.id}"><span class="dot" style="--c:${c.color}"></span><div class="main"><div class="title">${esc(c.label)}</div></div><span class="amt num">${yen(sums[c.id])}</span><span class="share num">${Math.round((sums[c.id] / all) * 100)}%</span></button>`
           )
           .join('') +
         `<div class="row"><div class="main"><div class="title">合計</div></div><span class="amt num">${yen(all)}</span><span class="share"></span></div>`
-      : '<div class="empty">この期間の支出はありません</div>';
+      : '<div class="empty">支出なし</div>';
   }
 
   function refresh() {

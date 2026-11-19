@@ -17,7 +17,7 @@ export function createHome(ctx) {
         <div data-ref="due"></div>
         <button class="stop-btn" data-ref="stop">
           <span class="mark">${icons.stop}</span>
-          <span><div class="t">買いたい・使いたい、と思ったら</div><div class="d" data-ref="stopD">金額を入れて、少し待ってから決める</div></span>
+          <span><div class="t">衝動ストップ</div><div class="d" data-ref="stopD" hidden></div></span>
         </button>
         <div class="section-title">最近の記録<button class="more" data-ref="more">すべて${icons.chevronR}</button></div>
         <div class="card" data-ref="recent"></div>
@@ -58,7 +58,7 @@ export function createHome(ctx) {
     const rem = stopRemaining();
     r.stop.classList.toggle('is-running', rem != null);
     if (rem == null) {
-      r.stopD.textContent = '金額を入れて、少し待ってから決める';
+      r.stopD.hidden = true;
       if (stopTimer) {
         clearInterval(stopTimer);
         stopTimer = null;
@@ -66,7 +66,8 @@ export function createHome(ctx) {
       return;
     }
     const a = store.get().stop.active;
-    r.stopD.textContent = rem <= 0 ? `${yen(a.amount)}、時間がたちました。決めましょう` : `${yen(a.amount)}を待っています… 残り${Math.ceil(rem / 60000)}分`;
+    r.stopD.hidden = false;
+    r.stopD.textContent = rem <= 0 ? `${yen(a.amount)} ・ 時間です` : `${yen(a.amount)} ・ 残り${Math.ceil(rem / 60000)}分`;
     if (!stopTimer) stopTimer = setInterval(renderStop, 15000);
   }
 
@@ -87,8 +88,7 @@ export function createHome(ctx) {
         <div><span>今後の使用予定</span><span class="num">合計 ${yen(o.upcomingTotal)}</span></div>
         <div><span>今月の貯金予定</span><span class="num">${yen(o.savingsThisMonth)}</span></div>
         ${o.savingsCumulative > 0 ? `<div><span>確保ずみの貯金</span><span class="num">${yen(o.savingsCumulative)}</span></div>` : ''}
-      </div>
-      <div class="hint">${mode === 'available' ? '現在の残高 − 使用予定 − 貯金。タップで現在の残高に' : 'タップで「使える残高」に切り替え'}</div>`;
+      </div>`;
 
     r.accounts.innerHTML = s.accounts
       .map((a) => {
@@ -99,7 +99,7 @@ export function createHome(ctx) {
       .join('');
 
     r.due.innerHTML = o.due.length
-      ? `<div class="section-title">予定日が来ました</div><div class="card due-card">${o.due
+      ? `<div class="section-title">予定日</div><div class="card due-card">${o.due
           .map(
             (x) => `<div class="row is-due"><span class="dot" style="--c:${categoryOf(x.p.category).color}"></span><div class="main"><div class="title">${esc(x.p.name)}</div><div class="meta">${dayLabel(x.due)} ・ ${esc(s.accounts.find((a) => a.id === x.p.accountId)?.name || '')}</div></div><span class="amt num">${yen(x.amount)}</span><span class="btns"><button class="mini-btn is-primary" data-act="record" data-id="${esc(x.p.id)}">記録</button><button class="mini-btn" data-act="skip" data-id="${esc(x.p.id)}">なし</button></span></div>`
           )
@@ -109,7 +109,7 @@ export function createHome(ctx) {
     const recent = [...s.tx].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt).slice(0, 6);
     r.recent.innerHTML = recent.length
       ? recent.map((t) => txRow(t, s)).join('')
-      : '<div class="empty">まだ記録がありません。<br>右下の＋から、支出や収入を記録できます</div>';
+      : '<div class="empty">記録なし</div>';
     renderStop();
   }
 

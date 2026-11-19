@@ -1,6 +1,6 @@
 // ネットワーク優先・失敗時はキャッシュ。更新がすぐ反映され、オフラインでも開ける。
 // OCR(Tesseract.js)の本体と言語データはCDNから取るので、一度使えば次回からはオフラインでも動く。
-const CACHE = 'saifu-v2';
+const CACHE = 'saifu-v3';
 const SHELL = [
   './',
   'index.html',

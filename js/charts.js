@@ -1,9 +1,7 @@
-// 端末内で描く小さなSVGグラフ（ライブラリなし・オフラインで動く）
-// 仕様: 棒は細め(最大24px)・データ端だけ4px丸め・積み上げの間に2pxのすき間・罫線は細い実線
-//       値ラベルは最後の月だけ、残りは目盛り・タップのツールチップ・表で読む
+// 端末内で描く小さなSVG折れ線（ライブラリなし・オフラインで動く）
+// 仕様: 線2px・点は半径4pxに2pxの縁・罫線は細い実線。値ラベルは最後の点だけ、残りはタップのツールチップと表で読む
 
 const NS = 'http://www.w3.org/2000/svg';
-const GAP = 2;
 
 function el(tag, attrs = {}, parent) {
   const n = document.createElementNS(NS, tag);
@@ -40,15 +38,6 @@ function niceScale(min, max, count = 4) {
   const ticks = [];
   for (let v = lo; v <= hi + step / 2; v += step) ticks.push(Math.round(v));
   return { lo, hi, ticks };
-}
-
-// 片側だけ丸めた棒（up=true なら上端、false なら下端を丸める）
-function barPath(x, w, yBase, yEnd, round) {
-  const up = yEnd < yBase;
-  const h = Math.abs(yBase - yEnd);
-  const r = round ? Math.min(4, h, w / 2) : 0;
-  if (up) return `M${x},${yBase}V${yEnd + r}Q${x},${yEnd} ${x + r},${yEnd}H${x + w - r}Q${x + w},${yEnd} ${x + w},${yEnd + r}V${yBase}Z`;
-  return `M${x},${yBase}V${yEnd - r}Q${x},${yEnd} ${x + r},${yEnd}H${x + w - r}Q${x + w},${yEnd} ${x + w},${yEnd - r}V${yBase}Z`;
 }
 
 function frame(host, { height, cats, lo, hi, ticks }) {
@@ -138,120 +127,79 @@ function bindColumns(f, n, onPick, onClear) {
 }
 
 /**
- * 棒グラフ（積み上げ対応・マイナス対応）
+ * 折れ線（複数系列・マイナス対応）
  * cats: [{label:'11月', title:'2026年11月'}]
- * series: [{id, label, color}]
- * values: values[i][s]
- * opts.colorAt(i, s) で棒ごとの色を変えられる（達成/未達など）
- * opts.marks: [{i, value, label}] 目標などを短い横線で重ねる
+ * series: [{label, color, values:[], area?:bool, dot?:(i)=>color|null, faint?:bool}]
+ * 値ラベルは系列が1本のときだけ、最後の点に1つ
  */
-export function columnChart(host, { cats, series, values, height = 200, colorAt, marks = [], tooltip, labelIndex = cats.length - 1, emptyText }) {
-  const totals = values.map((row) => row.reduce((a, v) => a + Math.max(0, v), 0));
-  const mins = values.map((row) => row.reduce((a, v) => a + Math.min(0, v), 0));
-  const maxV = Math.max(0, ...totals, ...marks.map((m) => m.value));
-  const minV = Math.min(0, ...mins);
-  if (maxV === 0 && minV === 0) {
+export function lineChart(host, { cats, series, height = 200, tooltip, emptyText }) {
+  const vals = series.flatMap((s) => s.values);
+  if (!vals.length || vals.every((v) => !v)) {
     host.textContent = '';
-    div('empty', host, emptyText || 'まだデータがありません');
+    host.classList.add('chart');
+    div('empty', host, emptyText || 'データなし');
     return;
   }
-  const { lo, hi, ticks } = niceScale(minV, maxV);
+  const { lo, hi, ticks } = niceScale(Math.min(0, ...vals), Math.max(0, ...vals));
   const f = frame(host, { height, cats, lo, hi, ticks });
-  const bw = Math.min(24, f.band * 0.56);
-  const cols = [];
-  const g = el('g', {}, f.svg);
-  values.forEach((row, i) => {
-    const cg = el('g', { class: 'col' }, g);
-    cols.push(cg);
-    const x = f.xc(i) - bw / 2;
-    let up = 0;
-    let down = 0;
-    const lastUp = row.reduce((k, v, s) => (v > 0 ? s : k), -1);
-    const lastDown = row.reduce((k, v, s) => (v < 0 ? s : k), -1);
-    row.forEach((v, s) => {
-      if (!v) return;
-      const color = colorAt ? colorAt(i, s) : series[s].color;
-      if (v > 0) {
-        let yb = f.y(up);
-        const ye = f.y(up + v);
-        if (up > 0) yb -= GAP;
-        up += v;
-        if (yb - ye < 0.5) return;
-        el('path', { d: barPath(x, bw, yb, ye, s === lastUp), fill: color }, cg);
-      } else {
-        let yb = f.y(down);
-        const ye = f.y(down + v);
-        if (down < 0) yb += GAP;
-        down += v;
-        if (ye - yb < 0.5) return;
-        el('path', { d: barPath(x, bw, yb, ye, s === lastDown), fill: color }, cg);
-      }
-    });
-  });
-  // 目標などの横線（棒より少し広い、実線2px）
-  marks.forEach((m) => {
-    const yy = f.y(m.value);
-    el('line', { x1: f.xc(m.i) - bw / 2 - 4, x2: f.xc(m.i) + bw / 2 + 4, y1: yy, y2: yy, class: 'target' }, g);
-  });
-  // 値ラベルは1か所だけ（ふつうは最後の月）
-  if (labelIndex >= 0 && labelIndex < values.length) {
-    const tot = totals[labelIndex] + mins[labelIndex];
-    const top = totals[labelIndex] > 0 ? f.y(totals[labelIndex]) : f.y(0);
-    const tx = el('text', { x: f.xc(labelIndex), y: top - 6, 'text-anchor': 'middle', class: 'val' }, f.svg);
-    tx.textContent = axisYen(tot);
-  }
-  bindColumns(
-    f,
-    values.length,
-    (i) => {
-      cols.forEach((c, k) => c.classList.toggle('is-dim', k !== i));
-      fillTip(f.tip, tooltip(i));
-      placeTip(f, i);
-    },
-    () => cols.forEach((c) => c.classList.remove('is-dim'))
-  );
-}
+  const ptsOf = (s) => s.values.map((v, i) => [f.xc(i), f.y(v)]);
+  const pathOf = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]},${p[1]}`).join('');
 
-/**
- * 折れ線（面の淡い塗りつき）。累計の推移に使う
- */
-export function lineChart(host, { cats, values, color, height = 180, tooltip, emptyText }) {
-  if (!values.length || values.every((v) => !v)) {
-    host.textContent = '';
-    div('empty', host, emptyText || 'まだデータがありません');
-    return;
+  series.forEach((s) => {
+    if (!s.area) return;
+    const pts = ptsOf(s);
+    el('path', { d: `${pathOf(pts)}L${pts[pts.length - 1][0]},${f.y(0)}L${pts[0][0]},${f.y(0)}Z`, fill: s.color, 'fill-opacity': 0.1 }, f.svg);
+  });
+  series.forEach((s) => {
+    const pts = ptsOf(s);
+    el('path', { d: pathOf(pts), fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: s.faint ? 0.55 : null }, f.svg);
+  });
+  // 点：dot 指定があれば各月に、なければ最後だけ（系列が1本のとき）
+  series.forEach((s) => {
+    const pts = ptsOf(s);
+    if (s.dot) {
+      pts.forEach((p, i) => {
+        const c = s.dot(i);
+        if (c) el('circle', { cx: p[0], cy: p[1], r: 4, fill: c, class: 'ring' }, f.svg);
+      });
+    } else if (series.length === 1 || pts.length === 1) {
+      const p = pts[pts.length - 1];
+      el('circle', { cx: p[0], cy: p[1], r: 4, fill: s.color, class: 'ring' }, f.svg);
+    }
+  });
+  if (series.length === 1) {
+    const s = series[0];
+    const last = s.values.length - 1;
+    const tx = el('text', { x: f.xc(last), y: f.y(s.values[last]) - 10, 'text-anchor': last > 0 ? 'end' : 'middle', class: 'val' }, f.svg);
+    tx.textContent = axisYen(s.values[last]);
   }
-  const { lo, hi, ticks } = niceScale(Math.min(0, ...values), Math.max(0, ...values));
-  const f = frame(host, { height, cats, lo, hi, ticks });
-  const pts = values.map((v, i) => [f.xc(i), f.y(v)]);
-  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]},${p[1]}`).join('');
-  el('path', { d: `${line}L${pts[pts.length - 1][0]},${f.y(0)}L${pts[0][0]},${f.y(0)}Z`, fill: color, 'fill-opacity': 0.1 }, f.svg);
-  el('path', { d: line, fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, f.svg);
+
   const cross = el('line', { y1: f.pad.t, y2: f.pad.t + f.ph, class: 'cross' }, f.svg);
   cross.style.display = 'none';
-  const dot = el('circle', { r: 4, fill: color, class: 'ring' }, f.svg);
-  const last = pts.length - 1;
-  // 終点に点と値
-  el('circle', { cx: pts[last][0], cy: pts[last][1], r: 4, fill: color, class: 'ring' }, f.svg);
-  const tx = el('text', { x: pts[last][0], y: pts[last][1] - 10, 'text-anchor': pts.length > 1 ? 'end' : 'middle', class: 'val' }, f.svg);
-  tx.textContent = axisYen(values[last]);
-  dot.style.display = 'none';
+  const hov = series.map((s) => {
+    const c = el('circle', { r: 4, fill: s.color, class: 'ring' }, f.svg);
+    c.style.display = 'none';
+    return c;
+  });
   bindColumns(
     f,
-    values.length,
+    cats.length,
     (i) => {
-      cross.setAttribute('x1', pts[i][0]);
-      cross.setAttribute('x2', pts[i][0]);
+      const x = f.xc(i);
+      cross.setAttribute('x1', x);
+      cross.setAttribute('x2', x);
       cross.style.display = '';
-      dot.setAttribute('cx', pts[i][0]);
-      dot.setAttribute('cy', pts[i][1]);
-      dot.style.display = '';
+      series.forEach((s, k) => {
+        hov[k].setAttribute('cx', x);
+        hov[k].setAttribute('cy', f.y(s.values[i]));
+        hov[k].style.display = '';
+      });
       fillTip(f.tip, tooltip(i));
       placeTip(f, i);
     },
     () => {
       cross.style.display = 'none';
-      dot.style.display = 'none';
+      hov.forEach((c) => (c.style.display = 'none'));
     }
   );
 }
@@ -268,7 +216,8 @@ export function legend(items, { shape = 'rect', active = null } = {}) {
       b.dataset.id = it.id;
     }
     const key = document.createElement('i');
-    key.className = shape === 'line' || it.shape === 'line' ? 'is-line' : '';
+    const sh = it.shape || shape;
+    key.className = sh === 'line' ? 'is-line' : sh === 'dot' ? 'is-dot' : '';
     key.style.background = it.color;
     b.append(key, document.createTextNode(it.label));
     wrap.append(b);

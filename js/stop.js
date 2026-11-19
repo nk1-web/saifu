@@ -32,7 +32,7 @@ export function openStop() {
       <div class="preview" data-ref="preview"></div>
       <div class="timer">
         <div class="clock num" data-ref="clock">${mmss(minutes * 60000)}</div>
-        <div class="state" data-ref="state">使う前に、これだけ待ってみる</div>
+        <div class="state" data-ref="state" hidden></div>
         <div class="ring-track"><i data-ref="bar" style="width:0"></i></div>
       </div>
       <div class="chips" data-ref="mins">${[...new Set([...PRESETS, Number(s.stop.minutes) || 10])]
@@ -45,10 +45,10 @@ export function openStop() {
         <button type="button" class="btn is-primary" data-ref="kept">やめた</button>
         <button type="button" class="btn" data-ref="spend">やっぱり使う</button>
       </div>
-      <div class="field-label">お金を貯めたい理由</div>
+      <div class="field-label">貯めたい理由</div>
       <div class="reasons" data-ref="reasons"></div>
-      <button type="button" class="btn" data-ref="addReason">${icons.plus}理由を書いておく</button>
-      <div class="saved-total">我慢して残したお金<b class="num" data-ref="saved">${yen(s.stop.savedTotal || 0)}</b></div>
+      <button type="button" class="btn" data-ref="addReason">${icons.plus}理由を追加</button>
+      <div class="saved-total">残せたお金<b class="num" data-ref="saved">${yen(s.stop.savedTotal || 0)}</b></div>
     </div>`);
   const r = refs(body);
 
@@ -56,7 +56,7 @@ export function openStop() {
     const list = store.get().stop.reasons || [];
     r.reasons.innerHTML = list.length
       ? list.map((t) => `<div class="reason">${esc(t)}</div>`).join('')
-      : '<div class="empty">ここに「なんのために貯めるか」を書いておくと、迷ったときに効きます</div>';
+      : '<div class="empty">理由なし</div>';
   }
   function renderPreview() {
     const o = overview(store.get());
@@ -64,9 +64,8 @@ export function openStop() {
     const cur = o.total - amt;
     const av = o.available - amt;
     r.preview.innerHTML = `
-      <div><span>使った後の現在の残高</span><b class="num ${cur < 0 ? 'is-neg' : ''}">${yen(cur)}</b></div>
-      <div><span>使った後の使える残高</span><b class="num ${av < 0 ? 'is-neg' : ''}">${yen(av)}</b></div>
-      ${av < 0 ? '<div class="note">使える残高を超えています（予定や貯金に食い込む）</div>' : ''}`;
+      <div><span>使った後の残高</span><b class="num ${cur < 0 ? 'is-neg' : ''}">${yen(cur)}</b></div>
+      <div><span>使った後の使える残高</span><b class="num ${av < 0 ? 'is-neg' : ''}">${yen(av)}</b></div>`;
   }
   function setMode(mode) {
     const running = mode === 'running';
@@ -76,7 +75,8 @@ export function openStop() {
     r.cancel.hidden = !running;
     r.decide.hidden = !done;
     r.amount.readOnly = running || done;
-    r.state.textContent = running ? '待っているあいだに、理由を読み返してみる' : done ? '時間がたちました。どうしますか' : '使う前に、これだけ待ってみる';
+    r.state.hidden = !done;
+    r.state.textContent = '時間です';
   }
   function tick() {
     const rem = stopRemaining();
